@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18.36 6.64a9 9 0 1 1-12.73 0'%3E%3C/path%3E%3Cline x1='12' y1='2' x2='12' y2='12'%3E%3C/line%3E%3C/svg%3E">
+    
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --surface-color: #000000;
+            --text-main: #ffffff;
+            --text-muted: rgba(255, 255, 255, 0.4);
+            --accent-glow: rgba(255, 255, 255, 0.15);
+        }
+
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow: hidden;
+        }
+
+        .terminal-card {
+            background: var(--surface-color);
+            padding: 50px 40px;
+            border-radius: 24px;
+            text-align: center;
+            width: 300px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+
+        .header {
+            margin-bottom: 40px;
+            letter-spacing: 2px;
+        }
+
+        h2, .subtitle, .status-text, .boot-count {
+            white-space: nowrap;
+        }
+
+        h2 {
+            margin: 0 0 6px 0;
+            font-size: 16px;
+            font-weight: 500;
+            letter-spacing: 4px;
+            height: 22px; 
+        }
+
+        .subtitle {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            height: 14px;
+        }
+
+        .status-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 40px;
+            min-height: 60px;
+        }
+
+        .magnetic-dot-wrapper {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 6px;
+            height: 6px;
+            will-change: transform;
+            pointer-events: none;
+        }
+
+        .status-indicator {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: var(--text-muted);
+            transition: background-color 0.8s ease, box-shadow 0.8s ease; 
+        }
+
+        .status-indicator.online {
+            background-color: #fff;
+            box-shadow: 0 0 10px #fff, 0 0 20px rgba(255, 255, 255, 0.5);
+            animation: pulse 3s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; transform: scale(0.9); }
+            100% { opacity: 1; transform: scale(1.1); box-shadow: 0 0 15px #fff, 0 0 30px rgba(255, 255, 255, 0.4); }
+        }
+
+        .status-text {
+            font-size: 12px;
+            color: var(--text-muted);
+            letter-spacing: 2px;
+            transition: color 0.5s ease;
+            height: 16px;
+        }
+
+        .boot-count {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.25);
+            letter-spacing: 1px;
+            margin-top: -2px;
+            font-variant-numeric: tabular-nums;
+            transition: opacity 0.5s ease;
+            opacity: 0;
+            height: 14px;
+        }
+
+        .magnetic-char {
+            display: inline-block;
+            will-change: transform;
+            pointer-events: none; 
+            white-space: pre;     
+        }
+
+        .btn-power {
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid rgba(255,255,255,0.1);
+            width: 76px;
+            height: 76px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto;
+            position: relative;
+            transition: background 0.3s, color 0.3s, box-shadow 0.3s, opacity 0.4s ease-out, visibility 0.4s;
+        }
+
+        .btn-power svg {
+            width: 28px;
+            height: 28px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-power:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            border-color: rgba(255,255,255,0.05);
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            .btn-power {
+                transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                opacity: 1;
+                visibility: visible;
+            }
+            .btn-power:active:not(:disabled) {
+                transform: scale(0.95);
+            }
+        }
+
+        @media (min-width: 768px) and (hover: hover) and (pointer: fine) {
+            .btn-power {
+                position: fixed;
+                z-index: 999;
+                margin: 0;
+                opacity: 0;
+                visibility: hidden;
+            }
+            .btn-power.visible {
+                opacity: 1;
+                visibility: visible;
+            }
+            .btn-power.visible:disabled {
+                opacity: 0.2;
+            }
+            .btn-power:hover:not(:disabled) {
+                background: var(--text-main);
+                color: var(--bg-color);
+                box-shadow: 0 0 25px var(--accent-glow);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="terminal-card">
+        <div class="header">
+            <h2 id="textH2"></h2>
+            <div id="textSub" class="subtitle"></div>
+        </div>
+        
+        <div class="status-wrapper">
+            <div id="statusDotWrapper" class="magnetic-dot-wrapper">
+                <div id="statusDot" class="status-indicator"></div>
+            </div>
+            <span id="statusText" class="status-text"></span>
+            <div id="bootCount" class="boot-count"></div>
+        </div>
+
+        <button id="wakeBtn" class="btn-power" disabled onclick="sendWakeCommand()">
+            <svg id="iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                <line x1="12" y1="2" x2="12" y2="12"></line>
+            </svg>
+        </button>
+    </div>
+
+    <script>
+        const isDesktop = window.matchMedia("(min-width: 768px) and (hover: hover) and (pointer: fine)").matches;
+        let repulseTargets = [];
+
+        function calculateBasePositions() {
+            if (!isDesktop) return; 
+            const chars = document.querySelectorAll('.magnetic-char, #statusDotWrapper');
+            repulseTargets = Array.from(chars).map(el => {
+                const oldTransform = el.style.transform;
+                el.style.transform = 'translate(0px, 0px)'; 
+                const rect = el.getBoundingClientRect();
+                el.style.transform = oldTransform;
+                
+                if (typeof el._currX === 'undefined') {
+                    el._currX = 0;
+                    el._currY = 0;
+                }
+                
+                return {
+                    el: el,
+                    baseX: rect.left + rect.width / 2,
+                    baseY: rect.top + rect.height / 2
+                };
+            });
+        }
+
+        function updateMagneticText(element, newText) {
+            element.innerHTML = ''; 
+            newText.split('').forEach(char => {
+                const span = document.createElement('span');
+                span.innerText = char;
+                span.className = 'magnetic-char';
+                element.appendChild(span);
+            });
+            setTimeout(calculateBasePositions, 50);
+        }
+
+        const textH2 = document.getElementById('textH2');
+        const textSub = document.getElementById('textSub');
+        const statusText = document.getElementById('statusText');
+        const bootCount = document.getElementById('bootCount');
+        const statusDot = document.getElementById('statusDot');
+        const wakeBtn = document.getElementById('wakeBtn');
+        const iconSvg = document.getElementById('iconSvg');
+
+        updateMagneticText(textH2, '终端控制');
+        updateMagneticText(textSub, 'ESP32·S3');
+        updateMagneticText(statusText, '连接中...');
+        updateMagneticText(bootCount, '累计开机: 0 次');
+
+        window.addEventListener('resize', calculateBasePositions);
+
+        // Replace with your MQTT broker URL (WebSocket) / 替换为你的 MQTT 服务器地址 (WebSocket)
+        const client = mqtt.connect('wss://YOUR_MQTT_BROKER_URL');
+        
+        const powerPath = `<path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line>`;
+        const checkPath = `<polyline points="20 6 9 17 4 12"></polyline>`;
+
+        fetch('api.php?action=get')
+            .then(response => response.json())
+            .then(data => {
+                updateMagneticText(bootCount, `累计开机: ${data.count} 次`);
+                bootCount.style.opacity = '1';
+            })
+            .catch(error => console.log('Database error:', error));
+
+        client.on('connect', function () {
+            updateMagneticText(statusText, '等待设备响应...');
+            client.subscribe('esp32/status');
+        });
+
+        client.on('message', function (topic, message) {
+            if (topic === 'esp32/status') {
+                const status = message.toString();
+                if (status === 'online') {
+                    statusDot.classList.add('online');
+                    updateMagneticText(statusText, '设备已就绪');
+                    statusText.style.color = 'rgba(255, 255, 255, 0.8)';
+                    wakeBtn.disabled = false;
+                } else if (status === 'offline') {
+                    statusDot.classList.remove('online');
+                    statusDot.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                    updateMagneticText(statusText, '设备已离线');
+                    statusText.style.color = 'var(--text-muted)';
+                    wakeBtn.disabled = true;
+                }
+            }
+        });
+
+        function sendWakeCommand() {
+            client.publish('esp32/pc_control', 'WAKE');
+            iconSvg.innerHTML = checkPath;
+            updateMagneticText(statusText, '指令已发送');
+            statusText.style.color = '#fff';
+            wakeBtn.style.background = 'rgba(255, 255, 255, 0.08)';
+            wakeBtn.disabled = true;
+
+            fetch('api.php?action=add')
+                .then(response => response.json())
+                .then(data => {
+                    updateMagneticText(bootCount, `累计开机: ${data.count} 次`);
+                });
+
+            setTimeout(() => {
+                iconSvg.innerHTML = powerPath;
+                updateMagneticText(statusText, '设备已就绪');
+                statusText.style.color = 'rgba(255, 255, 255, 0.8)';
+                wakeBtn.style.background = '';
+                wakeBtn.disabled = false;
+            }, 3000);
+        }
+
+        if (isDesktop) {
+            let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2;
+            let btnX = mouseX, btnY = mouseY;
+            let hoverScale = 1.0;
+            let isVisible = false;
+            let displayScale = 0; 
+
+            document.addEventListener('mouseleave', () => {
+                wakeBtn.classList.remove('visible');
+                isVisible = false;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                mouseX = e.clientX; mouseY = e.clientY;
+                if (!isVisible) {
+                    wakeBtn.classList.add('visible');
+                    isVisible = true;
+                }
+            });
+
+            wakeBtn.addEventListener('mouseenter', () => { if(!wakeBtn.disabled) hoverScale = 1.1; });
+            wakeBtn.addEventListener('mouseleave', () => hoverScale = 1.0);
+            wakeBtn.addEventListener('mousedown', () => { if(!wakeBtn.disabled) hoverScale = 0.95; });
+            wakeBtn.addEventListener('mouseup', () => { if(!wakeBtn.disabled) hoverScale = 1.1; });
+
+            function animateButton() {
+                btnX += (mouseX - btnX) * 0.12;
+                btnY += (mouseY - btnY) * 0.12;
+
+                const targetDisplayScale = isVisible ? 1 : 0;
+                displayScale += (targetDisplayScale - displayScale) * 0.15;
+                
+                let finalScale = 0;
+
+                if (displayScale > 0.001 || isVisible) {
+                    const centerX = window.innerWidth / 2;
+                    const centerY = window.innerHeight / 2;
+                    const distToCenter = Math.hypot(btnX - centerX, btnY - centerY);
+                    const maxDistToCenter = Math.hypot(centerX, centerY);
+
+                    let distanceScale = 1.5 - (distToCenter / maxDistToCenter) * 0.9;
+                    distanceScale = Math.max(0.6, Math.min(1.5, distanceScale));
+
+                    finalScale = distanceScale * hoverScale * displayScale;
+
+                    wakeBtn.style.left = `${btnX}px`;
+                    wakeBtn.style.top = `${btnY}px`;
+                    wakeBtn.style.transform = `translate(-50%, -50%) scale(${finalScale})`;
+                }
+
+                const btnActualRadius = 38 * finalScale; 
+                const repulseRadius = btnActualRadius + 90; 
+                const maxPush = 120; 
+
+                repulseTargets.forEach(target => {
+                    const dx = target.baseX - btnX;
+                    const dy = target.baseY - btnY;
+                    const dist = Math.hypot(dx, dy);
+
+                    let targetPushX = 0;
+                    let targetPushY = 0;
+
+                    if (isVisible && displayScale > 0.1 && dist < repulseRadius) {
+                        const safeDist = dist === 0 ? 0.001 : dist; 
+                        const force = Math.pow((repulseRadius - safeDist) / repulseRadius, 1.6);
+                        targetPushX = (dx / safeDist) * force * maxPush;
+                        targetPushY = (dy / safeDist) * force * maxPush;
+                    }
+
+                    target.el._currX += (targetPushX - target.el._currX) * 0.15;
+                    target.el._currY += (targetPushY - target.el._currY) * 0.15;
+
+                    target.el.style.transform = `translate(${target.el._currX}px, ${target.el._currY}px)`;
+                });
+
+                requestAnimationFrame(animateButton);
+            }
+            animateButton();
+        }
+    </script>
+</body>
+</html>
