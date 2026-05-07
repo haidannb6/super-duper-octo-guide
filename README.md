@@ -29,7 +29,7 @@ Deploy EMQX using Docker on your server:
 docker run -d --name emqx -p 1883:1883 -p 8083:8083 -p 8084:8084 -p 8883:8883 -p 18083:18083 emqx/emqx:latest
 
 ### 2. Web Deployment (Web Server)
-1. Create a site and configure SSL (Domain: nb6.icu).
+1. Create a site and configure SSL.
 2. Upload index.html and api.php to the root directory.
 3. Add the WebSocket reverse proxy in Nginx:
 location /mqtt {
@@ -92,7 +92,7 @@ Chinese
 docker run -d --name emqx -p 1883:1883 -p 8083:8083 -p 8084:8084 -p 8883:8883 -p 18083:18083 emqx/emqx:latest
 
 ### 2. 网页端部署 (Web Server)
-1. 在宝塔中创建站点并配置 SSL 证书（域名：nb6.icu）。
+1. 在宝塔中创建站点并配置 SSL 证书。
 2. 上传 index.html 与 api.php 至网站根目录。
 3. 在 Nginx 配置文件中添加 WebSocket 反向代理：
 location /mqtt {
