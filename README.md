@@ -1,4 +1,4 @@
-English
+##English
 # ESP32-S3 Remote Wake-on-LAN and Web Console
 
 ## Project Overview
@@ -61,7 +61,7 @@ location /mqtt {
 * Insufficient power may cause the board to reboot; use a high-quality power source.
 * WSS protocol is mandatory for MQTT communication under HTTPS environments.
 
-Chinese
+##Chinese
 # ESP32-S3 远程开机与网页控制台
 
 ## 项目简介
