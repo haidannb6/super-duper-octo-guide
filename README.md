@@ -1,6 +1,7 @@
 ## Demo
 <img width="400" height="225" alt="2026-05-08 11-20-57" src="https://github.com/user-attachments/assets/33c5fff8-a9c8-4ca9-be0a-67e4ea5b9ce1" />
-
+## Full video
+https://www.bilibili.com/video/BV163duBwEz7
 
 ## English
 # ESP32-S3 Remote Wake-on-LAN and Web Console
